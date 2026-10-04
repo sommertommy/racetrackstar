@@ -16,6 +16,9 @@ const photoUrls = new Map(); // carId -> objectURL
 
 function toast(msg, ms = 2600) {
   const el = $('toast');
+  // Et åbent <dialog> ligger i browserens øverste lag – beskeden skal ind i det for at kunne ses
+  const host = document.querySelector('dialog[open]') || document.body;
+  if (el.parentElement !== host) host.appendChild(el);
   el.textContent = msg;
   el.hidden = false;
   clearTimeout(toast._t);
@@ -38,8 +41,10 @@ function beep(freq = 880, dur = 0.09, gain = 0.25) {
   } catch { /* lyd er ikke kritisk */ }
 }
 
+// Fotos gemmes som data-URL; ældre biler kan have et Blob-foto.
 function photoUrl(car) {
   if (!car.photo) return null;
+  if (typeof car.photo === 'string') return car.photo;
   if (!photoUrls.has(car.id)) photoUrls.set(car.id, URL.createObjectURL(car.photo));
   return photoUrls.get(car.id);
 }
@@ -123,13 +128,13 @@ function openCarDialog(car = null) {
   $('dlg-car').showModal();
 }
 
-function setCarPhotoPreview(blob) {
+function setCarPhotoPreview(photo) {
   const img = $('car-photo-preview');
   const ph = $('car-photo-placeholder');
   const wrap = document.querySelector('.photo-pick');
-  if (img.src) URL.revokeObjectURL(img.src);
-  if (blob) {
-    img.src = URL.createObjectURL(blob);
+  if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+  if (photo) {
+    img.src = typeof photo === 'string' ? photo : URL.createObjectURL(photo);
     img.hidden = false;
     ph.hidden = true;
     wrap.classList.add('has-photo');
@@ -150,8 +155,12 @@ $('btn-car-rephoto').addEventListener('click', () => $('car-photo-input').click(
 $('car-photo-input').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
-  pendingPhoto = await shrinkPhoto(file);
-  setCarPhotoPreview(pendingPhoto);
+  try {
+    pendingPhoto = await shrinkPhoto(file);
+    setCarPhotoPreview(pendingPhoto);
+  } catch (err) {
+    toast('Billedet kunne ikke bruges: ' + err.message + '. Prøv et andet billede.', 4500);
+  }
   e.target.value = '';
 });
 
@@ -190,7 +199,11 @@ $('car-color').addEventListener('input', e => {
 $('form-car').addEventListener('submit', async e => {
   e.preventDefault();
   const name = $('car-name').value.trim();
-  if (!name) return;
+  if (!name) {
+    toast('Giv bilen et navn, før du gemmer');
+    $('car-name').focus();
+    return;
+  }
   const colorInput = $('car-color');
   const colorHsv = colorInput.dataset.hsv ? JSON.parse(colorInput.dataset.hsv) : hexToHsv(colorInput.value);
   const car = {
@@ -201,7 +214,12 @@ $('form-car').addEventListener('submit', async e => {
     colorHex: colorInput.value,
     createdAt: editingCar?.createdAt || Date.now(),
   };
-  await put('cars', car);
+  try {
+    await put('cars', car);
+  } catch (err) {
+    toast('Bilen kunne ikke gemmes: ' + (err?.message || err) + '. Er du i et privat vindue?', 6000);
+    return;
+  }
   const old = photoUrls.get(car.id);
   if (old) { URL.revokeObjectURL(old); photoUrls.delete(car.id); }
   cars = await getAll('cars');
@@ -1111,6 +1129,20 @@ $('btn-race-delete').addEventListener('click', async () => {
 async function init() {
   await seedDefaults();
   [cars, types, races] = await Promise.all([getAll('cars'), getAll('types'), getAll('races')]);
+  // Ældre versioner gemte fotos som Blob – omskriv til data-URL, som alle browsere kan gemme
+  for (const car of cars) {
+    if (car.photo && typeof car.photo !== 'string') {
+      try {
+        car.photo = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result);
+          r.onerror = () => rej(r.error);
+          r.readAsDataURL(car.photo);
+        });
+        await put('cars', car);
+      } catch { /* behold det gamle foto */ }
+    }
+  }
   cars.sort((a, b) => a.createdAt - b.createdAt);
   types.sort((a, b) => a.createdAt - b.createdAt);
   renderGarage();

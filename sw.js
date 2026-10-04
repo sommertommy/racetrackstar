@@ -1,7 +1,7 @@
 // Service worker: cacher app-skallen så appen også åbner uden netværk,
 // og tilføjer cross-origin-isolation-headers, så YOLO kan bruge flere CPU-tråde
 // også på hosts der ikke selv kan sende dem (fx GitHub Pages).
-const CACHE = 'racetrackstar-v4';
+const CACHE = 'racetrackstar-v5';
 const SHELL = [
   './',
   'index.html',

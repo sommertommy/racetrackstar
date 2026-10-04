@@ -45,14 +45,15 @@ export async function getAll(storeName) {
 export const put = (storeName, obj) => tx(storeName, 'readwrite', s => s.put(obj));
 export const del = (storeName, id) => tx(storeName, 'readwrite', s => s.delete(id));
 
-// Nedskalerer et foto til max 640 px og returnerer en JPEG-blob til lagring.
+// Nedskalerer et foto til max 640 px og returnerer det som JPEG-data-URL.
+// Gemmes som tekst, ikke Blob: Safari på iPhone kan fejle ved Blobs i IndexedDB (især fra hjemmeskærmen).
 export async function shrinkPhoto(file, maxSize = 640) {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise((resolve, reject) => {
       const i = new Image();
       i.onload = () => resolve(i);
-      i.onerror = reject;
+      i.onerror = () => reject(new Error('Billedformatet kan ikke læses'));
       i.src = url;
     });
     const scale = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight));
@@ -61,8 +62,7 @@ export async function shrinkPhoto(file, maxSize = 640) {
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
-    return blob || file;
+    return canvas.toDataURL('image/jpeg', 0.85);
   } finally {
     URL.revokeObjectURL(url);
   }
