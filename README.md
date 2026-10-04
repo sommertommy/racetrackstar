@@ -1,5 +1,7 @@
 # RaceTrackstar
 
+**Åbn appen: https://sommertommy.github.io/racetrackstar/**. Åbn linket på telefonen, og vælg "Føj til hjemmeskærm".
+
 Mobile-first webapp til RC-ræs: opret dine biler med billede og navn, definér løbstyper, og kør løb hvor telefonens kamera tracker bilerne rundt på banen og tæller omgange, når de krydser mållinjen. Alle løb gemmes i historikken.
 
 ## Sådan bruger du den
