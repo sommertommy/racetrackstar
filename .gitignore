@@ -1,0 +1,7 @@
+# Lokalt selvsigneret certifikat – den private nøgle må aldrig offentliggøres
+certs/
+
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>RaceTrackstar</title>
+<meta name="description" content="Tidtagning og lap-tracking til RC-biler med mobilkamera">
+<meta name="theme-color" content="#0c0e13">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 3v18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M4 4h12l-2 3 2 3H4z" fill="var(--accent)"/></svg>
+    <span>RaceTrackstar</span>
+  </div>
+  <span id="topbar-status" class="topbar-status"></span>
+</header>
+
+<main id="main">
+
+  <!-- ============ GARAGE ============ -->
+  <section id="view-garage" class="view">
+    <div class="view-head">
+      <h1>Garage</h1>
+      <button class="btn btn-accent" id="btn-add-car">+ Tilføj bil</button>
+    </div>
+    <div id="car-list" class="card-grid"></div>
+    <p id="garage-empty" class="empty-hint" hidden>
+      Ingen biler endnu. Tilføj din første RC-bil med billede, navn og en tracking-farve.
+    </p>
+  </section>
+
+  <!-- ============ LØBSTYPER ============ -->
+  <section id="view-types" class="view" hidden>
+    <div class="view-head">
+      <h1>Løbstyper</h1>
+      <button class="btn btn-accent" id="btn-add-type">+ Ny løbstype</button>
+    </div>
+    <div id="type-list" class="stack"></div>
+  </section>
+
+  <!-- ============ RÆS (wizard) ============ -->
+  <section id="view-race" class="view" hidden>
+    <!-- Trin 1: vælg løbstype -->
+    <div id="race-step-type" class="race-step">
+      <div class="view-head"><h1>Nyt løb</h1></div>
+      <p class="step-label">1 · Vælg løbstype</p>
+      <div id="race-type-list" class="stack"></div>
+    </div>
+
+    <!-- Trin 2: vælg biler -->
+    <div id="race-step-cars" class="race-step" hidden>
+      <div class="view-head"><h1>Nyt løb</h1></div>
+      <p class="step-label">2 · Vælg biler</p>
+      <div id="race-car-list" class="card-grid"></div>
+      <div class="wizard-actions">
+        <button class="btn" id="btn-race-back-type">Tilbage</button>
+        <button class="btn btn-accent" id="btn-race-to-track" disabled>Videre</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HISTORIK ============ -->
+  <section id="view-history" class="view" hidden>
+    <div class="view-head"><h1>Historik</h1></div>
+    <div id="history-list" class="stack"></div>
+    <p id="history-empty" class="empty-hint" hidden>Ingen gemte løb endnu. Kør dit første ræs!</p>
+  </section>
+
+</main>
+
+<!-- ============ KAMERA / LØBS-SKÆRM (fuldskærm) ============ -->
+<div id="race-screen" class="race-screen" hidden>
+  <div class="cam-wrap" id="cam-wrap">
+    <video id="cam" playsinline muted autoplay></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <!-- fase: mållinje -->
+  <div class="race-panel" id="panel-line" hidden>
+    <p class="panel-hint">Træk en streg hen over mållinjen med fingeren</p>
+    <div class="panel-row">
+      <button class="btn" id="btn-line-redo" disabled>Tegn igen</button>
+      <button class="btn btn-accent" id="btn-line-ok" disabled>Mållinje OK</button>
+    </div>
+  </div>
+
+  <!-- fase: find bilerne -->
+  <div class="race-panel" id="panel-colors" hidden>
+    <p class="panel-hint">Vælg en bil og tryk på dens boks i billedet</p>
+    <div class="chip-row" id="color-chips"></div>
+    <p class="panel-warn" id="color-warn" hidden></p>
+    <p class="yolo-status" id="yolo-status">Indlæser YOLO …</p>
+    <div class="seg" role="group" aria-label="YOLO-model">
+      <button type="button" class="seg-btn" data-size="640">Præcis</button>
+      <button type="button" class="seg-btn" data-size="320">Hurtig</button>
+    </div>
+    <label class="slider-row" for="yolo-conf">
+      <span>Følsomhed</span>
+      <input type="range" id="yolo-conf" min="0.1" max="0.6" step="0.05" value="0.25">
+      <span id="yolo-conf-val">25%</span>
+    </label>
+    <div class="panel-row">
+      <button class="btn btn-accent" id="btn-colors-ok">Start løb</button>
+    </div>
+  </div>
+
+  <!-- fase: nedtælling -->
+  <div class="countdown" id="countdown" hidden><span id="countdown-num">3</span></div>
+
+  <!-- fase: racing HUD -->
+  <div class="hud" id="hud" hidden>
+    <div class="hud-top">
+      <span class="race-clock" id="race-clock">0:00.0</span>
+      <span class="race-target" id="race-target"></span>
+    </div>
+    <div class="hud-cars" id="hud-cars"></div>
+  </div>
+
+  <div class="race-panel race-panel-bottom" id="panel-race" hidden>
+    <div class="panel-row">
+      <button class="btn btn-danger" id="btn-race-abort">Afbryd</button>
+      <button class="btn" id="btn-race-stop">Afslut løb</button>
+    </div>
+  </div>
+
+  <!-- fase: resultat -->
+  <div class="result-sheet" id="result-sheet" hidden>
+    <h2 id="result-title">Løb afsluttet</h2>
+    <div id="result-list" class="stack"></div>
+    <div class="panel-row">
+      <button class="btn btn-accent" id="btn-result-done">Gem og luk</button>
+    </div>
+  </div>
+
+  <button class="btn-close" id="btn-cam-close" aria-label="Luk">&times;</button>
+</div>
+
+<!-- ============ DIALOGER ============ -->
+<dialog id="dlg-car">
+  <form method="dialog" id="form-car">
+    <h2 id="dlg-car-title">Ny bil</h2>
+    <div class="photo-pick">
+      <img id="car-photo-preview" alt="" hidden>
+      <div id="car-photo-placeholder" class="photo-placeholder">Tryk for at tage billede</div>
+      <input type="file" id="car-photo-input" accept="image/*" capture="environment">
+    </div>
+    <p class="field-hint">Tip: tryk på bilens farve i billedet for at sætte tracking-farven.
+      <button type="button" class="linklike" id="btn-car-rephoto" hidden>Tag nyt billede</button></p>
+    <label class="field">Navn
+      <input type="text" id="car-name" required maxlength="24" placeholder="fx Rød Lynet" autocomplete="off">
+    </label>
+    <label class="field">Tracking-farve
+      <span class="color-field">
+        <span class="swatch" id="car-swatch"></span>
+        <input type="color" id="car-color" value="#e8392b">
+      </span>
+    </label>
+    <div class="panel-row">
+      <button type="button" class="btn btn-danger" id="btn-car-delete" hidden>Slet</button>
+      <button type="button" class="btn" id="btn-car-cancel">Annullér</button>
+      <button type="submit" class="btn btn-accent" id="btn-car-save">Gem</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-type">
+  <form method="dialog" id="form-type">
+    <h2 id="dlg-type-title">Ny løbstype</h2>
+    <label class="field">Navn
+      <input type="text" id="type-name" required maxlength="30" placeholder="fx Sprint" autocomplete="off">
+    </label>
+    <label class="field">Format
+      <select id="type-mode">
+        <option value="laps">Antal omgange</option>
+        <option value="time">Tid (minutter)</option>
+      </select>
+    </label>
+    <label class="field" id="field-laps">Omgange
+      <input type="number" id="type-laps" min="1" max="500" value="10" inputmode="numeric">
+    </label>
+    <label class="field" id="field-minutes" hidden>Minutter
+      <input type="number" id="type-minutes" min="1" max="120" value="5" inputmode="numeric">
+    </label>
+    <label class="field">Min. omgangstid (sek. – filtrerer dobbelt-tællinger)
+      <input type="number" id="type-minlap" min="1" max="120" value="4" inputmode="numeric">
+    </label>
+    <label class="field">Lysspor efter bilen (sekunder, 0 = slukket)
+      <input type="number" id="type-trail" min="0" max="15" step="0.5" value="3" inputmode="decimal">
+    </label>
+    <label class="toggle"><input type="checkbox" id="type-flying" checked> <span>Flyvende start (uret starter ved første passage)</span></label>
+    <label class="field">Tidtagning
+      <select id="type-tracking">
+        <option value="camera">Kamera-tracking</option>
+        <option value="manual">Manuel (tryk pr. omgang)</option>
+      </select>
+    </label>
+    <div class="panel-row">
+      <button type="button" class="btn btn-danger" id="btn-type-delete" hidden>Slet</button>
+      <button type="button" class="btn" id="btn-type-cancel">Annullér</button>
+      <button type="submit" class="btn btn-accent">Gem</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-race-detail">
+  <div id="race-detail-body"></div>
+  <div class="panel-row">
+    <button class="btn btn-danger" id="btn-race-delete">Slet løb</button>
+    <button class="btn btn-accent" id="btn-race-detail-close">Luk</button>
+  </div>
+</dialog>
+
+<!-- ============ BUNDNAVIGATION ============ -->
+<nav class="tabbar" id="tabbar">
+  <button data-view="garage" class="tab active">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-6 9 6v9H3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M7 20v-5h10v5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+    <span>Garage</span>
+  </button>
+  <button data-view="types" class="tab">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 13V9M10 3h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <span>Løbstyper</span>
+  </button>
+  <button data-view="race" class="tab tab-main">
+    <svg viewBox="0 0 24 24"><path d="M6 3v18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 4h11l-2 3.5L17 11H6z" fill="currentColor"/></svg>
+    <span>Ræs</span>
+  </button>
+  <button data-view="history" class="tab">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+    <span>Historik</span>
+  </button>
+</nav>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
